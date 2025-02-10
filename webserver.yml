@@ -1,0 +1,71 @@
+---
+- name: Configure Apache on two Ubuntu EC2 instances
+  hosts: webservers
+  become: true
+  tags:
+    - deploy
+  tasks:
+    - name: Refresh package cache
+      apt:
+        update_cache: yes
+
+    - name: Ensure Apache is installed
+      apt:
+        name: apache2
+        state: present
+
+    - name: Change Apache's listening port to 8080
+      lineinfile:
+        path: /etc/apache2/ports.conf
+        regexp: '^Listen\s+80'
+        line: "Listen 8080"
+        state: present
+
+    - name: Update default site configuration for port 8080
+      copy:
+        dest: /etc/apache2/sites-available/000-default.conf
+        content: |
+          <VirtualHost *:8080>
+            DocumentRoot /var/www/html
+          </VirtualHost>
+        force: yes
+
+    - name: Deploy index page on VM1
+      copy:
+        dest: /var/www/html/index.html
+        content: "Hello World from SJSU-1"
+        force: yes
+      when: inventory_hostname == "vm1"
+
+    - name: Deploy index page on VM2
+      copy:
+        dest: /var/www/html/index.html
+        content: "Hello World from SJSU-2"
+        force: yes
+      when: inventory_hostname == "vm2"
+
+    - name: Restart Apache to apply changes
+      service:
+        name: apache2
+        state: restarted
+
+- name: Undeploy Apache deployment
+  hosts: webservers
+  become: true
+  tags:
+    - undeploy
+  tasks:
+    - name: Stop Apache service
+      service:
+        name: apache2
+        state: stopped
+
+    - name: Uninstall Apache package
+      apt:
+        name: apache2
+        state: absent
+
+    - name: Remove index file from web root
+      file:
+        path: /var/www/html/index.html
+        state: absent
